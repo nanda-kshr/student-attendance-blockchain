@@ -1,0 +1,49 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-2b1f72234b2befd31edbb7eb1ac0b0c39b37f42d",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.5.1"
+  },
+  "userSourceNameMap": {
+    "contracts/Attendance.sol": "project/contracts/Attendance.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/Attendance.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract Attendance {\n\n    struct Record {\n        string studentId;\n        string date;\n        string subjectCode;\n        bool present;\n    }\n\n    Record[] public records;\n\n    function markAttendance(\n        string memory _studentId,\n        string memory _date,\n        string memory _subjectCode,\n        bool _present\n    ) public {\n\n        records.push(\n            Record(\n                _studentId,\n                _date,\n                _subjectCode,\n                _present\n            )\n        );\n    }\n\n    function getCount() public view returns(uint) {\n        return records.length;\n    }\n}"
+      }
+    }
+  }
+}

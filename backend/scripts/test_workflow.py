@@ -7,7 +7,7 @@ import requests
 
 
 def base_url() -> str:
-    port = os.environ.get("PORT", "5000")
+    port = os.environ.get("PORT", "4000")
     return f"http://127.0.0.1:{port}"
 
 
@@ -44,7 +44,7 @@ def login_user(email: str, password: str) -> str:
 def main() -> None:
     suffix = str(int(time.time()))
     teacher_email = f"teacher_{suffix}@example.com"
-    student_emails = [f"student_{suffix}_{i}@example.com" for i in range(5)]
+    student_email = f"student_{suffix}@example.com"
     password = "Password123!"
 
     print("1) Teacher creates an account")
@@ -59,44 +59,64 @@ def main() -> None:
     )
     course_id = course["id"]
 
-    print("3) 5 Students create accounts")
-    students: list[dict] = []
-    for email in student_emails:
-        students.append(register_user(email, password, "student"))
+    print("3) Register as a student")
+    student = register_user(student_email, password, "student")
+    student_token = login_user(student_email, password)
 
-    print("4) 5 Students enroll in the course")
-    student_tokens: list[str] = []
-    for email in student_emails:
-        token = login_user(email, password)
-        student_tokens.append(token)
-        post(f"/courses/{course_id}/enroll", token)
+    print("4) Get all my courses (should be empty)")
+    my_courses = get("/courses/enrolled", student_token)
+    print("My courses:", my_courses)
 
-    print("5) Teacher logs in")
+    print("5) Get all other courses")
+    other_courses = get("/courses/available", student_token)
+    print("Other courses:", other_courses)
+
+    print("6) Enroll the course")
+    post(f"/courses/{course_id}/enroll", student_token)
+
+    print("7) Login as a teacher")
     teacher_token = login_user(teacher_email, password)
 
-    print("6) Marks attendance (random 2/5 students are absent)")
-    absent_indexes = set(random.sample(range(len(students)), 2))
+    print("8) Show all teacher courses")
+    teacher_courses = get("/courses", teacher_token)
+    print("Teacher courses:", teacher_courses)
+
+    print("9) Select first course")
+    first_course = teacher_courses[0]
+    first_course_id = first_course["id"]
+
+    print("10) Get all students in the first course")
+    students = get(f"/courses/{first_course_id}/students", teacher_token)
+    print("Students:", students)
+
+    print("11) Mark students present/absent randomly")
     today = date.today().isoformat()
-    for idx, student in enumerate(students):
-        present = idx not in absent_indexes
+    for entry in students:
+        present = random.choice([True, False])
         post(
             "/attendance",
             teacher_token,
             {
-                "course_id": course_id,
+                "course_id": first_course_id,
                 "date": today,
-                "student_id": student["id"],
+                "student_id": entry["id"],
                 "present": present,
             },
         )
 
-    print("7) Students log in")
-    student_tokens = [login_user(email, password) for email in student_emails]
+    print("12) Login as a student")
+    student_token = login_user(student_email, password)
 
-    print("8) Students check attendance")
-    for email, token in zip(student_emails, student_tokens):
-        records = get("/attendance", token, {"course_id": course_id})
-        print(email, records)
+    print("13) Get all my courses")
+    my_courses = get("/courses/enrolled", student_token)
+    print("My courses:", my_courses)
+
+    print("14) Select the first enrolled course")
+    enrolled_course_id = my_courses[0]["id"]
+
+    print("15) Check the attendance")
+    records = get("/attendance", student_token, {"course_id": enrolled_course_id})
+    print("Attendance:", records)
 
 
 if __name__ == "__main__":

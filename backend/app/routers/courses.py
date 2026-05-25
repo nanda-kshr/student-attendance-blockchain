@@ -1,3 +1,4 @@
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.db.mongo import db
@@ -23,9 +24,54 @@ async def create_course(
 
 
 @router.get("", response_model=list[CourseOut])
-async def list_courses(user: UserPublic = Depends(get_current_user)) -> list[CourseOut]:
+async def list_courses(
+    mine: bool = False, user: UserPublic = Depends(get_current_user)
+) -> list[CourseOut]:
+    if mine and user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = {"teacher_id": user.id} if user.role == "teacher" else {}
+
     courses = []
-    async for doc in db.courses.find():
+    async for doc in db.courses.find(query):
+        courses.append(CourseOut(**serialize_doc(doc)))
+    return courses
+
+
+@router.get("/enrolled", response_model=list[CourseOut])
+async def list_enrolled_courses(
+    user: UserPublic = Depends(require_role("student")),
+) -> list[CourseOut]:
+    course_ids: list[ObjectId] = []
+    async for enrollment in db.enrollments.find({"student_id": user.id}):
+        try:
+            course_ids.append(to_object_id(enrollment["course_id"]))
+        except HTTPException:
+            continue
+
+    if not course_ids:
+        return []
+
+    courses: list[CourseOut] = []
+    async for doc in db.courses.find({"_id": {"$in": course_ids}}):
+        courses.append(CourseOut(**serialize_doc(doc)))
+    return courses
+
+
+@router.get("/available", response_model=list[CourseOut])
+async def list_available_courses(
+    user: UserPublic = Depends(require_role("student")),
+) -> list[CourseOut]:
+    enrolled_ids: list[ObjectId] = []
+    async for enrollment in db.enrollments.find({"student_id": user.id}):
+        try:
+            enrolled_ids.append(to_object_id(enrollment["course_id"]))
+        except HTTPException:
+            continue
+
+    query = {"_id": {"$nin": enrolled_ids}} if enrolled_ids else {}
+    courses: list[CourseOut] = []
+    async for doc in db.courses.find(query):
         courses.append(CourseOut(**serialize_doc(doc)))
     return courses
 
@@ -91,3 +137,21 @@ async def enroll_course(
 
     await db.enrollments.insert_one({"course_id": course_id, "student_id": user.id})
     return {"status": "enrolled"}
+
+
+@router.get("/{course_id}/students", response_model=list[UserPublic])
+async def list_course_students(
+    course_id: str, user: UserPublic = Depends(require_role("teacher"))
+) -> list[UserPublic]:
+    course = await db.courses.find_one({"_id": to_object_id(course_id)})
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if course["teacher_id"] != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    students: list[UserPublic] = []
+    async for enrollment in db.enrollments.find({"course_id": course_id}):
+        student = await db.users.find_one({"_id": to_object_id(enrollment["student_id"])})
+        if student:
+            students.append(UserPublic(**serialize_doc(student)))
+    return students

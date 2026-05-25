@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     jwt_secret: str = Field("fakfFBKJEABFKJA-me", alias="JWT_SECRET")
     jwt_alg: str = "HS256"
     access_token_exp_minutes: int = 60 * 24
+    contract_address: str | None = Field(None, alias="CONTRACT_ADDRESS")
+    rpc_url: str | None = Field(None, alias="RPC_URL")
+    private_key: str | None = Field(None, alias="PRIVATE_KEY")
 
 
 @lru_cache
