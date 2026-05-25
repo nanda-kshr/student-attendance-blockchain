@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+motor
+pydantic
+pydantic-settings
+python-jose
+passlib[argon2]
+email-validator
+requests==2.32.3
