@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.blockchain.attendance_client import mark_attendance_onchain, get_attendance_student_course
+from app.blockchain.attendance_client import (
+    mark_attendance_onchain,
+    get_attendance_student_course,
+    get_student_subject_percentages,
+)
 from app.db.mongo import db
 from app.deps import get_current_user, require_role, serialize_doc, to_object_id
 from app.schemas.attendance import AttendanceCreate, AttendanceOut, SearchAttendanceOut
@@ -62,22 +66,20 @@ async def list_attendance(
 
 @router.get("/student", response_model=SearchAttendanceOut)
 async def get_student_attendance(
-    student_id: str | None = None,
-    subject_code: str | None = None,
+    student_id: str,
+    subject_code: str,
     user: UserPublic = Depends(get_current_user),
 ) -> SearchAttendanceOut:
-    if not student_id:
-        if user.role == "student":
-            student_id = user.id
-        else:
-            raise HTTPException(status_code=400, detail="student_id required")
+    if user.role == "student" and user.id != student_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-    remote = get_attendance_student_course(student_id, subject_code) or []
+    remote = get_attendance_student_course(student_id, subject_code)
+    if not isinstance(remote, list):
+        raise HTTPException(status_code=502, detail="Blockchain read failed")
 
     try:
         attended_classes = sum(1 for i in remote if i.get("present") is True)
         total_classes = len(remote)
-
         attendance_percentage = (attended_classes / total_classes * 100.0) if total_classes else 0.0
 
         data = {
@@ -91,6 +93,30 @@ async def get_student_attendance(
         raise HTTPException(status_code=502, detail=f"Blockchain read failed: {exc}") from exc
 
     return data
+
+
+
+@router.get("/student/{student_id}/subjects", response_model=list[SearchAttendanceOut])
+async def student_subjects(
+    student_id: str,
+    user: UserPublic = Depends(get_current_user),
+) -> list[SearchAttendanceOut]:
+    # students can only query their own data
+    if user.role == "student" and user.id != student_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    remote = get_student_subject_percentages(student_id)
+    if remote is None:
+        raise HTTPException(status_code=502, detail="Blockchain read failed")
+
+    results: list[SearchAttendanceOut] = []
+    try:
+        for item in remote:
+            results.append(SearchAttendanceOut(**item))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Malformed blockchain response: {exc}") from exc
+
+    return results
 
 @router.get("/course/{course_id}/summary")
 async def course_attendance_summary(

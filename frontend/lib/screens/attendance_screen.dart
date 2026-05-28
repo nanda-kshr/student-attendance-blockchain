@@ -5,6 +5,7 @@ import '../core/auth_state.dart';
 import '../models/attendance.dart';
 import '../models/course.dart';
 import '../models/student.dart';
+import '../models/subject_attendance.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -24,6 +25,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Course? _selectedCourse;
   List<Student> _students = [];
   final Set<String> _presentStudentIds = {};
+  List<SubjectAttendance> _subjectAttendance = [];
 
   @override
   void didChangeDependencies() {
@@ -180,6 +182,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  Future<void> _loadSubjectPercentages() async {
+    final auth = AuthScope.of(context);
+    if (auth.userId == null) return;
+    setState(() {
+      _isLoading = true;
+      _subjectAttendance = [];
+    });
+    try {
+      final data = await _api.get(
+        '/attendance/student/${auth.userId}/subjects',
+        token: auth.token,
+      ) as List<dynamic>;
+      setState(() {
+        _subjectAttendance = data
+            .map((item) => SubjectAttendance.fromJson(item as Map<String, dynamic>))
+            .toList();
+      });
+    } catch (error) {
+      _showError(error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   void _showError(Object error) {
     if (!mounted) {
       return;
@@ -276,6 +306,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         ),
         if (!isTeacher) ...[
           const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _isLoading ? null : _loadAttendance,
+                  child: const Text('Load attendance'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _isLoading ? null : _loadSubjectPercentages,
+                  child: const Text('My percentages'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           if (_isLoading)
             const Center(child: CircularProgressIndicator())
           else if (_records.isEmpty)
@@ -297,6 +345,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ),
               ),
             ),
+          if (_subjectAttendance.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Attendance Percentage', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            ..._subjectAttendance.map((s) => Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  child: ListTile(
+                    title: Text(s.subjectCode),
+                    subtitle: Text('Attended ${s.attendedClasses}/${s.totalClasses} classes'),
+                    trailing: Text('${s.attendancePercentage.toStringAsFixed(1)}%'),
+                  ),
+                )),
+          ],
         ],
       ],
     );

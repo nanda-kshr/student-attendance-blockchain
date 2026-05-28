@@ -19,8 +19,8 @@ class AttendanceOut(BaseModel):
     teacher_id: str
 
 class SearchAttendance(BaseModel):
-    student_id: str | None = None
-    subject_code: str | None = None
+    student_id: str
+    subject_code: str
 
 class SearchAttendanceOut(BaseModel):
     student_id: str | None = None
