@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     contract_address: str | None = Field(None, alias="CONTRACT_ADDRESS")
     rpc_url: str | None = Field(None, alias="RPC_URL")
     private_key: str | None = Field(None, alias="PRIVATE_KEY")
+    blockchain_url: str | None = Field(None, alias="BLOCKCHAIN_URL")
 
 
 @lru_cache

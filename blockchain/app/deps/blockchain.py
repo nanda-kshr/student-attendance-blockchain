@@ -15,7 +15,39 @@ class BlockChain:
             b = Block(data.copy(), "0", self.index)
         self.chain.append(b)
         self.save_chain()
+    
+    def get_data(self, index=None, student_id=None, subject_code=None):
+        if index is None and student_id is None and subject_code is None:
+            return None
 
+        try:
+            results = []
+            for block in self.chain:
+                match = False
+                if index is not None and block.index == index:
+                    match = True
+                else:
+                    if student_id is not None and subject_code is not None:
+                        if (block.data.get("student_id") == student_id
+                                and block.data.get("subject_code") == subject_code):
+                            match = True
+                    elif student_id is not None:
+                        if block.data.get("student_id") == student_id:
+                            match = True
+                    elif subject_code is not None:
+                        if block.data.get("subject_code") == subject_code:
+                            match = True
+
+                if match:
+                    results.append(block.data)
+
+            if not results:
+                raise IndexError("block not found")
+            return results
+        except Exception as e:
+            return {"error": str(e)}
+            
+    
     def is_block_valid(self, b: Block):
         if self.chain:
             if b.previous_hash != self.chain[-1].hash_value:

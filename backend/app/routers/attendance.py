@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from starlette.concurrency import run_in_threadpool
 
-from app.blockchain.attendance_client import mark_attendance_onchain
+from app.blockchain.attendance_client import mark_attendance_onchain, get_attendance_student_course
 from app.db.mongo import db
 from app.deps import get_current_user, require_role, serialize_doc, to_object_id
-from app.schemas.attendance import AttendanceCreate, AttendanceOut
+from app.schemas.attendance import AttendanceCreate, AttendanceOut, SearchAttendanceOut
 from app.schemas.user import UserPublic
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -28,13 +27,7 @@ async def create_attendance(
 
     date_str = payload.date.isoformat()
     try:
-        await run_in_threadpool(
-            mark_attendance_onchain,
-            payload.student_id,
-            date_str,
-            course["code"],
-            payload.present,
-        )
+        mark_attendance_onchain(payload.student_id,date_str,payload.course_id,payload.present)
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -67,6 +60,37 @@ async def list_attendance(
         records.append(AttendanceOut(**serialize_doc(doc)))
     return records
 
+@router.get("/student", response_model=SearchAttendanceOut)
+async def get_student_attendance(
+    student_id: str | None = None,
+    subject_code: str | None = None,
+    user: UserPublic = Depends(get_current_user),
+) -> SearchAttendanceOut:
+    if not student_id:
+        if user.role == "student":
+            student_id = user.id
+        else:
+            raise HTTPException(status_code=400, detail="student_id required")
+
+    remote = get_attendance_student_course(student_id, subject_code) or []
+
+    try:
+        attended_classes = sum(1 for i in remote if i.get("present") is True)
+        total_classes = len(remote)
+
+        attendance_percentage = (attended_classes / total_classes * 100.0) if total_classes else 0.0
+
+        data = {
+            "student_id": student_id,
+            "subject_code": subject_code,
+            "attendance_percentage": attendance_percentage,
+            "total_classes": total_classes,
+            "attended_classes": attended_classes,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Blockchain read failed: {exc}") from exc
+
+    return data
 
 @router.get("/course/{course_id}/summary")
 async def course_attendance_summary(
